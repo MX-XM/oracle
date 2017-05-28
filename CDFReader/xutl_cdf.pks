@@ -26,13 +26,18 @@ create or replace package xutl_cdf is
 =========================================================================================
     Change history :
     Marc Bleron       2017-05-08     Creation
+    Marc Bleron       2017-05-25     Fixed get_stream offset bug
+                                     Refactored exception numbers
 ====================================================================================== */
 
   invalid_handle   exception;
-  pragma exception_init(invalid_handle, -20001);
+  pragma exception_init(invalid_handle, -20701);
   
   no_stream_found  exception;
-  pragma exception_init(no_stream_found, -20002);
+  pragma exception_init(no_stream_found, -20702);
+  
+  invalid_stream_offset  exception;
+  pragma exception_init(invalid_stream_offset, -20703);
 
   subtype cdf_handle is pls_integer;
   

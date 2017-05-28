@@ -17,6 +17,7 @@ create or replace package body xutl_cdf is
   
   ERR_INVALID_HANDLE   constant varchar2(128) := 'Invalid context handle';
   ERR_NO_STREAM_FOUND  constant varchar2(128) := 'No stream found';
+  ERR_INVALID_OFFSET   constant varchar2(128) := 'Specified offset (%s) must be lower than stream size (%s)';
   
   subtype name_t is varchar2(31 char);
   
@@ -429,15 +430,23 @@ create or replace package body xutl_cdf is
     target_ministream_offset  pls_integer;
     is_mini                   boolean := false;
     curr_sect_idx             pls_integer;
+    i                         pls_integer;
+    skipped                   integer := nvl(offset, 0);
+    first_segment             boolean := true;
     
   begin
     
     if not file.dir_map.exists(path) then
-      raise_application_error(-20002, ERR_NO_STREAM_FOUND);
+      raise_application_error(-20702, ERR_NO_STREAM_FOUND);
     end if;
     idx := file.dir_map(path);
-    strt_sect := file.dir(idx).strt_sect;
+    
     stream_size := file.dir(idx).stream_size;
+    if skipped >= stream_size then
+      raise_application_error(-20703, utl_lms.format_message(ERR_INVALID_OFFSET,to_char(skipped),to_char(stream_size)));
+    end if;
+    
+    strt_sect := file.dir(idx).strt_sect;
     base_sect_size := file.header.sect_size;
     
     -- regular or mini-stream?
@@ -458,9 +467,17 @@ create or replace package body xutl_cdf is
     dbms_lob.createtemporary(stream, true);
     
     -- corrected stream size
-    stream_size := stream_size - offset;
+    stream_size := stream_size - skipped;
     
-    for i in 1 .. chain.count loop
+    -- start segment in fat or minifat chain
+    i := trunc(skipped / sect_size);
+    -- corrected offset in the 1st target sector or minisector
+    skipped := mod(skipped, sect_size); 
+    
+    --for i in 1 .. chain.count loop
+    while i < chain.count loop
+      
+      i := i + 1;
       
       amount := least(stream_size-dest_offset+1, sect_size);
       curr_sect_idx := chain(i);
@@ -475,8 +492,12 @@ create or replace package body xutl_cdf is
       end if;
       
       -- apply offset param for the 1st segment
-      if i = 1 then
-        src_offset := src_offset + offset;
+      if first_segment then
+        src_offset := src_offset + skipped;
+        if amount > skipped then
+          amount := amount - skipped;
+        end if;
+        first_segment := false;
       end if;
       
       dbms_lob.copy(stream, file.content, amount, dest_offset, src_offset);
@@ -532,7 +553,7 @@ create or replace package body xutl_cdf is
       end if;
       cdf_cache.delete(p_hdl);
     else
-      raise_application_error(-20001, ERR_INVALID_HANDLE);
+      raise_application_error(-20701, ERR_INVALID_HANDLE);
     end if;
   end;
 
@@ -545,7 +566,7 @@ create or replace package body xutl_cdf is
   is
   begin
     if not cdf_cache.exists(p_hdl) then
-      raise_application_error(-20001, ERR_INVALID_HANDLE);
+      raise_application_error(-20701, ERR_INVALID_HANDLE);
     end if;
     return get_stream_int(cdf_cache(p_hdl), p_path, p_offset);
   end;
