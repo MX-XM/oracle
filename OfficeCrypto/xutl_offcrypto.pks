@@ -28,6 +28,9 @@ create or replace package xutl_offcrypto is
     Marc Bleron       2017-05-24     Creation
 ====================================================================================== */
 
+  invalid_cdf               exception;
+  pragma exception_init (invalid_cdf, -20710);
+
   invalid_password          exception;
   pragma exception_init (invalid_password, -20711);
   

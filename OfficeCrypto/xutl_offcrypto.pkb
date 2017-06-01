@@ -12,6 +12,7 @@ create or replace package body xutl_offcrypto is
   PROVIDER_RC4      constant pls_integer := 1;     -- 00000001
   PROVIDER_AES      constant pls_integer := 24;    -- 00000018
   
+  ERR_NOT_CDF       constant varchar2(128) := 'Input file is not a valid CFBF container';
   ERR_INVALID_PWD   constant varchar2(128) := 'Invalid password';
   ERR_AES_KEYSIZE   constant varchar2(128) := 'Unsupported AES key size : %s';
   ERR_CIPHER_ALG    constant varchar2(128) := 'Unsupported cipher algorithm : %s';
@@ -181,16 +182,20 @@ create or replace package body xutl_offcrypto is
     case p_alg
     when 'SHA1' then 
       output := dbms_crypto.HASH_SH1;
+    when 'MD5' then
+      output := dbms_crypto.HASH_MD5;
+    when 'MD4' then
+      output := dbms_crypto.HASH_MD4;
+    -- SHA-2 hash algorithms available starting with Oracle 12
+    $IF DBMS_DB_VERSION.VERSION >= 12 
+    $THEN
     when 'SHA256' then
       output := dbms_crypto.HASH_SH256;
     when 'SHA384' then
       output := dbms_crypto.HASH_SH384;
     when 'SHA512' then
       output := dbms_crypto.HASH_SH512;
-    when 'MD5' then
-      output := dbms_crypto.HASH_MD5;
-    when 'MD4' then
-      output := dbms_crypto.HASH_MD4;
+    $END
     else
       -- Unsupported hash algorithm : %s
       error(-20714, ERR_HASH_ALG, p_alg);
@@ -698,6 +703,10 @@ create or replace package body xutl_offcrypto is
     
   begin
     
+    if not xutl_cdf.is_cdf(p_file) then
+      error(-20710, ERR_NOT_CDF);
+    end if;
+  
     hdl := xutl_cdf.open_file(p_file);
     stream1 := xutl_cdf.get_stream(hdl, '/EncryptionInfo');
     stream2 := xutl_cdf.get_stream(hdl, '/EncryptedPackage');
